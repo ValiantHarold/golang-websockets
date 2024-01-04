@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"log"
 	"net/http"
 	"sync"
@@ -9,21 +10,55 @@ import (
 )
 
 var upgrader = websocket.Upgrader{
+	CheckOrigin:     checkOrigin,
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
+}
+
+func checkOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	log.Println(origin)
+
+	switch origin {
+	case "localhost:3000":
 		return true
-	},
+	default:
+		return false
+	}
 }
 
 type Manager struct {
 	clients ClientList
 	sync.RWMutex
+	handlers map[string]EventHandler
 }
 
 func NewManager() *Manager {
-	return &Manager{
-		clients: make(ClientList),
+	m := &Manager{
+		clients:  make(ClientList),
+		handlers: make(map[string]EventHandler),
+	}
+	m.setupEventHandlers()
+	return m
+}
+
+func (m *Manager) setupEventHandlers() {
+	m.handlers[EventSendMessage] = SendMessage
+}
+
+func SendMessage(event Event, c *Client) error {
+	log.Println(event)
+	return nil
+}
+
+func (m *Manager) routeEvent(event Event, c *Client) error {
+	if handler, ok := m.handlers[event.Type]; ok {
+		if err := handler(event, c); err != nil {
+			return err
+		}
+		return nil
+	} else {
+		return errors.New("There is no such event type")
 	}
 }
 
