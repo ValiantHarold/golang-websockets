@@ -1,0 +1,12 @@
+{
+	"check-error": {
+		"prefix": "che",
+		"body": [
+			"if err != nil {"
+			"	log.Println(err)"
+			"	${1:return}"
+			"}"
+		],
+		"description": "add check error section"
+	}
+}
