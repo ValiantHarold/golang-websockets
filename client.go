@@ -9,8 +9,10 @@ import (
 )
 
 var (
-	pongWait     = 10 * time.Second
-	pingInterval = (pongWait * 9) / 10
+	writeWait      = 10 * time.Second
+	pongWait       = 60 * time.Second
+	pingPeriod     = (pongWait * 9) / 10
+	maxMessageSize = 512
 )
 
 type ClientList map[*Client]bool
@@ -71,7 +73,7 @@ func (c *Client) writeMessages() {
 		c.manager.removeClient(c)
 	}()
 
-	ticker := time.NewTicker(pingInterval)
+	ticker := time.NewTicker(pingPeriod)
 
 	for {
 		select {

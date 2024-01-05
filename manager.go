@@ -16,15 +16,16 @@ var upgrader = websocket.Upgrader{
 }
 
 func checkOrigin(r *http.Request) bool {
-	origin := r.Header.Get("Origin")
-	log.Println(origin)
+	return true
 
-	switch origin {
-	case "localhost:3000":
-		return true
-	default:
-		return false
-	}
+	// origin := r.Header.Get("Origin")
+
+	// switch origin {
+	// case "localhost:3000":
+	// 	return true
+	// default:
+	// 	return false
+	// }
 }
 
 type Manager struct {
@@ -43,12 +44,7 @@ func NewManager() *Manager {
 }
 
 func (m *Manager) setupEventHandlers() {
-	m.handlers[EventSendMessage] = SendMessage
-}
-
-func SendMessage(event Event, c *Client) error {
-	log.Println(event)
-	return nil
+	m.handlers[EventSendMessage] = SendMessageHandler
 }
 
 func (m *Manager) routeEvent(event Event, c *Client) error {
@@ -66,7 +62,6 @@ func (m *Manager) serveWS(w http.ResponseWriter, r *http.Request) {
 	log.Println("New Connection")
 
 	conn, err := upgrader.Upgrade(w, r, nil)
-
 	if err != nil {
 		log.Println(err)
 		return

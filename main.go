@@ -15,4 +15,5 @@ func setupAPI() {
 	manager := NewManager()
 
 	http.HandleFunc("/websocket", manager.serveWS)
+	http.HandleFunc("/websocket/", manager.serveWS)
 }
