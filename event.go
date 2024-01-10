@@ -15,17 +15,17 @@ type Event struct {
 type EventHandler func(event Event, c *Client) error
 
 const (
-	EventAddFriend    = "add_friend"
-	EventAcceptFriend = "accept_friend"
-	EventSendMessage  = "send_message"
-	EventNewMessage   = "new_message"
+	EventAddFriend   = "add_friend"
+	EventNewFriend   = "new_friend"
+	EventSendMessage = "send_message"
+	EventNewMessage  = "new_message"
 )
 
 type AddFriendEvent struct {
 	Channel string `json:"channel"`
 }
 
-type AcceptFriendEvent struct {
+type NewFriendEvent struct {
 	SenderId string `json:"senderId"`
 }
 
@@ -77,7 +77,22 @@ func AddFriendHandler(event Event, c *Client) error {
 		return fmt.Errorf("bad payload in request: %v", err)
 	}
 
-	log.Println(c.manager.channels[friendEvent.Channel])
+	var newFriend NewFriendEvent
+
+	newFriend.SenderId = c.userId
+
+	data, err := json.Marshal(newFriend)
+	if err != nil {
+		return fmt.Errorf("failed to marshal broadcast message: %v", err)
+	}
+
+	var outgoingEvent Event
+	outgoingEvent.Type = EventNewFriend
+	outgoingEvent.Data = data
+
+	for client := range c.manager.channels[friendEvent.Channel] {
+		client.egress <- outgoingEvent
+	}
 
 	return nil
 }

@@ -78,8 +78,8 @@ func (m *Manager) serveWS(w http.ResponseWriter, r *http.Request) {
 	client := NewClient(userId, conn, m)
 
 	m.addClient(client)
-	m.addChannel("user__" + userId + "__friends")
-	m.addChannel("user__" + userId + "__messages")
+	m.joinChannel(client, "user__"+userId+"__friends")
+	m.joinChannel(client, "user__"+userId+"__messages")
 
 	go client.readMessages()
 	go client.writeMessages()
@@ -107,7 +107,6 @@ func (m *Manager) addChannel(channelName string) {
 	defer m.Unlock()
 
 	m.channels[channelName] = make(ClientList)
-	log.Println("New Channel: ", channelName)
 }
 
 func (m *Manager) joinChannel(client *Client, channelName string) {
@@ -115,7 +114,7 @@ func (m *Manager) joinChannel(client *Client, channelName string) {
 	defer m.Unlock()
 
 	if _, ok := m.channels[channelName]; !ok {
-		m.addChannel(channelName)
+		m.channels[channelName] = make(ClientList)
 	}
 
 	m.channels[channelName][client] = true
