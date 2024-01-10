@@ -9,44 +9,50 @@ import (
 )
 
 var (
-	writeWait      = 10 * time.Second
-	pongWait       = 60 * time.Second
-	pingPeriod     = (pongWait * 9) / 10
-	maxMessageSize = 512
+	writeWait = 10 * time.Second
+
+	pongWait   = 60 * time.Second
+	pingPeriod = (pongWait * 9) / 10
+
+	maxMessageSize int64 = 512
 )
 
 type ClientList map[*Client]bool
 
 type Client struct {
-	connection *websocket.Conn
-	manager    *Manager
-	egress     chan Event
+	userId  string
+	conn    *websocket.Conn
+	manager *Manager
+	egress  chan Event
 }
 
-func NewClient(conn *websocket.Conn, manager *Manager) *Client {
+func NewClient(userId string, conn *websocket.Conn, manager *Manager) *Client {
+	log.Println("New Client: ", userId)
 	return &Client{
-		connection: conn,
-		manager:    manager,
-		egress:     make(chan Event),
+		userId,
+		conn,
+		manager,
+		make(chan Event),
 	}
 }
 
 func (c *Client) readMessages() {
 	defer func() {
+		c.manager.removeChannel("user__" + c.userId + "__friends")
+		c.manager.removeChannel("user__" + c.userId + "__messages")
 		c.manager.removeClient(c)
 	}()
 
-	if err := c.connection.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
+	if err := c.conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
 		log.Println(err)
 		return
 	}
 
-	c.connection.SetReadLimit(512)
-
-	c.connection.SetPongHandler(c.pongHandler)
+	c.conn.SetReadLimit(maxMessageSize)
+	c.conn.SetPongHandler(c.pongHandler)
 
 	for {
-		_, payload, err := c.connection.ReadMessage()
+		_, payload, err := c.conn.ReadMessage()
 
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
@@ -70,6 +76,8 @@ func (c *Client) readMessages() {
 
 func (c *Client) writeMessages() {
 	defer func() {
+		c.manager.leaveChannel(c, "user__"+c.userId+"__friends")
+		c.manager.leaveChannel(c, "user__"+c.userId+"__messages")
 		c.manager.removeClient(c)
 	}()
 
@@ -79,8 +87,8 @@ func (c *Client) writeMessages() {
 		select {
 		case message, ok := <-c.egress:
 			if !ok {
-				if err := c.connection.WriteMessage(websocket.CloseMessage, nil); err != nil {
-					log.Println("connection closed: ", err)
+				if err := c.conn.WriteMessage(websocket.CloseMessage, nil); err != nil {
+					log.Println("conn closed: ", err)
 
 				}
 				return
@@ -92,14 +100,14 @@ func (c *Client) writeMessages() {
 				return
 			}
 
-			if err := c.connection.WriteMessage(websocket.TextMessage, data); err != nil {
+			if err := c.conn.WriteMessage(websocket.TextMessage, data); err != nil {
 				log.Println("failed to send message: ", err)
 			}
 			log.Println("sent message: ", message)
 		case <-ticker.C:
 			log.Println("ping")
 
-			if err := c.connection.WriteMessage(websocket.PingMessage, []byte(``)); err != nil {
+			if err := c.conn.WriteMessage(websocket.PingMessage, []byte(``)); err != nil {
 				log.Println("writemsg err: ", err)
 				return
 			}
@@ -109,5 +117,5 @@ func (c *Client) writeMessages() {
 
 func (c *Client) pongHandler(pongMsg string) error {
 	log.Println("pong")
-	return c.connection.SetReadDeadline(time.Now().Add(pongWait))
+	return c.conn.SetReadDeadline(time.Now().Add(pongWait))
 }

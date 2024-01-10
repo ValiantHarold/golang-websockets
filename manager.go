@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 )
 
@@ -29,14 +30,17 @@ func checkOrigin(r *http.Request) bool {
 }
 
 type Manager struct {
-	clients ClientList
-	sync.RWMutex
+	clients  ClientList
+	channels map[string]ClientList
 	handlers map[string]EventHandler
+	sync.RWMutex
 }
 
 func NewManager() *Manager {
+	log.Println("New Manager")
 	m := &Manager{
 		clients:  make(ClientList),
+		channels: make(map[string]ClientList),
 		handlers: make(map[string]EventHandler),
 	}
 	m.setupEventHandlers()
@@ -45,6 +49,7 @@ func NewManager() *Manager {
 
 func (m *Manager) setupEventHandlers() {
 	m.handlers[EventSendMessage] = SendMessageHandler
+	m.handlers[EventAddFriend] = AddFriendHandler
 }
 
 func (m *Manager) routeEvent(event Event, c *Client) error {
@@ -61,15 +66,20 @@ func (m *Manager) routeEvent(event Event, c *Client) error {
 func (m *Manager) serveWS(w http.ResponseWriter, r *http.Request) {
 	log.Println("New Connection")
 
+	vars := mux.Vars(r)
+	userId := vars["userId"]
+
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println(err)
 		return
 	}
 
-	client := NewClient(conn, m)
+	client := NewClient(userId, conn, m)
 
 	m.addClient(client)
+	m.addChannel("user__" + userId + "__friends")
+	m.addChannel("user__" + userId + "__messages")
 
 	go client.readMessages()
 	go client.writeMessages()
@@ -87,7 +97,48 @@ func (m *Manager) removeClient(client *Client) {
 	defer m.Unlock()
 
 	if _, ok := m.clients[client]; ok {
-		client.connection.Close()
+		client.conn.Close()
 		delete(m.clients, client)
 	}
+}
+
+func (m *Manager) addChannel(channelName string) {
+	m.Lock()
+	defer m.Unlock()
+
+	m.channels[channelName] = make(ClientList)
+	log.Println("New Channel: ", channelName)
+}
+
+func (m *Manager) joinChannel(client *Client, channelName string) {
+	m.Lock()
+	defer m.Unlock()
+
+	if _, ok := m.channels[channelName]; !ok {
+		m.addChannel(channelName)
+	}
+
+	m.channels[channelName][client] = true
+}
+
+func (m *Manager) leaveChannel(client *Client, channelName string) {
+	m.Lock()
+	defer m.Unlock()
+
+	if channel, ok := m.channels[channelName]; ok {
+		if _, ok := channel[client]; ok {
+			delete(channel, client)
+		}
+	}
+}
+
+func (m *Manager) removeChannel(channelName string) {
+	m.Lock()
+	defer m.Unlock()
+
+	if _, ok := m.channels[channelName]; ok {
+		delete(m.channels, channelName)
+	}
+	log.Println("Removed Channel: ", channelName)
+
 }

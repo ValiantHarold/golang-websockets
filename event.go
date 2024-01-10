@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"time"
 )
 
@@ -21,8 +22,11 @@ const (
 )
 
 type AddFriendEvent struct {
-	SenderId    string `json:"senderId"`
-	SenderEmail string `json:"senderEmail"`
+	Channel string `json:"channel"`
+}
+
+type AcceptFriendEvent struct {
+	SenderId string `json:"senderId"`
 }
 
 type SendMessageEvent struct {
@@ -35,34 +39,51 @@ type NewMessageEvent struct {
 	Sent time.Time `json:"sent"`
 }
 
-func SendMessageHandler(event Event, c *Client) error {
-	// Marshal Payload into wanted format
-	var chatevent SendMessageEvent
-	if err := json.Unmarshal(event.Data, &chatevent); err != nil {
+// func SendMessageHandler(event Event, c *Client) error {
+// 	// Marshal Payload into wanted format
+// 	var chatevent SendMessageEvent
+// 	if err := json.Unmarshal(event.Data, &chatevent); err != nil {
+// 		return fmt.Errorf("bad payload in request: %v", err)
+// 	}
+
+// 	// Prepare an Outgoing Message to others
+// 	var broadMessage NewMessageEvent
+
+// 	broadMessage.Sent = time.Now()
+// 	broadMessage.SenderId = chatevent.SenderId
+// 	broadMessage.Message = chatevent.Message
+
+// 	data, err := json.Marshal(broadMessage)
+// 	if err != nil {
+// 		return fmt.Errorf("failed to marshal broadcast message: %v", err)
+// 	}
+
+// 	// Place payload into an Event
+// 	var outgoingEvent Event
+// 	outgoingEvent.Type = EventNewMessage
+// 	outgoingEvent.Data = data
+// 	// Broadcast to all other Clients
+// 	for client := range c.manager.clients {
+
+// 		client.egress <- outgoingEvent
+
+// 	}
+// 	return nil
+// }
+
+func AddFriendHandler(event Event, c *Client) error {
+	var friendEvent AddFriendEvent
+	if err := json.Unmarshal(event.Data, &friendEvent); err != nil {
 		return fmt.Errorf("bad payload in request: %v", err)
 	}
 
-	// Prepare an Outgoing Message to others
-	var broadMessage NewMessageEvent
+	log.Println(c.manager.channels[friendEvent.Channel])
 
-	broadMessage.Sent = time.Now()
-	broadMessage.SenderId = chatevent.SenderId
-	broadMessage.Message = chatevent.Message
+	return nil
+}
 
-	data, err := json.Marshal(broadMessage)
-	if err != nil {
-		return fmt.Errorf("failed to marshal broadcast message: %v", err)
-	}
+func SendMessageHandler(event Event, c *Client) error {
+	log.Println(event)
 
-	// Place payload into an Event
-	var outgoingEvent Event
-	outgoingEvent.Type = EventNewMessage
-	outgoingEvent.Data = data
-	// Broadcast to all other Clients
-	for client := range c.manager.clients {
-
-		client.egress <- outgoingEvent
-
-	}
 	return nil
 }
