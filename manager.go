@@ -46,8 +46,9 @@ func NewManager() *Manager {
 }
 
 func (m *Manager) setupEventHandlers() {
+	m.handlers[EventIncomingFriend] = IncomingFriendHandler
+	m.handlers[EventAcceptFriend] = AcceptFriendHandler
 	m.handlers[EventSendMessage] = SendMessageHandler
-	m.handlers[EventAddFriend] = AddFriendHandler
 }
 
 func (m *Manager) routeEvent(event Event, c *Client) error {

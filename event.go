@@ -13,18 +13,27 @@ type Event struct {
 type EventHandler func(event Event, c *Client) error
 
 const (
-	EventAddFriend   = "add_friend"
-	EventNewFriend   = "new_friend"
-	EventSendMessage = "send_message"
-	EventNewMessage  = "new_message"
+	EventIncomingFriend = "incoming_friend"
+	EventNewFriend      = "new_friend"
+	EventAcceptFriend   = "accept_friend"
+	EventAddFriend      = "add_friend"
+	EventSendMessage    = "send_message"
+	EventNewMessage     = "new_message"
 )
 
-type AddFriendEvent struct {
+type IncomingFriendEvent struct {
 	UserId string `json:"userId"`
 }
 
 type NewFriendEvent struct {
 	SenderId string `json:"senderId"`
+}
+type AcceptFriendEvent struct {
+	UserId string `json:"userId"`
+}
+type AddFriendEvent struct {
+	SenderId string `json:"senderId"`
+	FriendId string `json:"friendId"`
 }
 
 type SendMessageEvent struct {
@@ -37,8 +46,8 @@ type NewMessageEvent struct {
 	Message  string `json:"message"`
 }
 
-func AddFriendHandler(event Event, c *Client) error {
-	var friendEvent AddFriendEvent
+func IncomingFriendHandler(event Event, c *Client) error {
+	var friendEvent IncomingFriendEvent
 	if err := json.Unmarshal(event.Data, &friendEvent); err != nil {
 		return fmt.Errorf("bad payload in request: %v", err)
 	}
@@ -60,6 +69,38 @@ func AddFriendHandler(event Event, c *Client) error {
 	outgoingEvent.Type = EventNewFriend
 	outgoingEvent.Data = data
 
+	c.manager.clients[friendEvent.UserId].egress <- outgoingEvent
+
+	return nil
+}
+
+func AcceptFriendHandler(event Event, c *Client) error {
+	var friendEvent AcceptFriendEvent
+	if err := json.Unmarshal(event.Data, &friendEvent); err != nil {
+		return fmt.Errorf("bad payload in request: %v", err)
+	}
+
+	friend, exists := c.manager.clients[friendEvent.UserId]
+
+	if !exists {
+		return fmt.Errorf("Friend does not exists")
+	}
+
+	// Send to user
+	var AddFriend AddFriendEvent
+	AddFriend.SenderId = c.userId
+	AddFriend.FriendId = friend.userId
+
+	data, err := json.Marshal(AddFriend)
+	if err != nil {
+		return fmt.Errorf("failed to marshal broadcast message: %v", err)
+	}
+
+	var outgoingEvent Event
+	outgoingEvent.Type = EventNewFriend
+	outgoingEvent.Data = data
+
+	c.egress <- outgoingEvent
 	c.manager.clients[friendEvent.UserId].egress <- outgoingEvent
 
 	return nil
