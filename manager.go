@@ -31,7 +31,6 @@ func checkOrigin(r *http.Request) bool {
 
 type Manager struct {
 	clients  ClientList
-	channels map[string]ClientList
 	handlers map[string]EventHandler
 	sync.RWMutex
 }
@@ -40,7 +39,6 @@ func NewManager() *Manager {
 	log.Println("New Manager")
 	m := &Manager{
 		clients:  make(ClientList),
-		channels: make(map[string]ClientList),
 		handlers: make(map[string]EventHandler),
 	}
 	m.setupEventHandlers()
@@ -78,8 +76,6 @@ func (m *Manager) serveWS(w http.ResponseWriter, r *http.Request) {
 	client := NewClient(userId, conn, m)
 
 	m.addClient(client)
-	m.joinChannel(client, "user__"+userId+"__friends")
-	m.joinChannel(client, "user__"+userId+"__messages")
 
 	go client.readMessages()
 	go client.writeMessages()
@@ -89,55 +85,15 @@ func (m *Manager) addClient(client *Client) {
 	m.Lock()
 	defer m.Unlock()
 
-	m.clients[client] = true
+	m.clients[client.userId] = client
 }
 
 func (m *Manager) removeClient(client *Client) {
 	m.Lock()
 	defer m.Unlock()
 
-	if _, ok := m.clients[client]; ok {
+	if _, ok := m.clients[client.userId]; ok {
 		client.conn.Close()
-		delete(m.clients, client)
+		delete(m.clients, client.userId)
 	}
-}
-
-func (m *Manager) addChannel(channelName string) {
-	m.Lock()
-	defer m.Unlock()
-
-	m.channels[channelName] = make(ClientList)
-}
-
-func (m *Manager) joinChannel(client *Client, channelName string) {
-	m.Lock()
-	defer m.Unlock()
-
-	if _, ok := m.channels[channelName]; !ok {
-		m.channels[channelName] = make(ClientList)
-	}
-
-	m.channels[channelName][client] = true
-}
-
-func (m *Manager) leaveChannel(client *Client, channelName string) {
-	m.Lock()
-	defer m.Unlock()
-
-	if channel, ok := m.channels[channelName]; ok {
-		if _, ok := channel[client]; ok {
-			delete(channel, client)
-		}
-	}
-}
-
-func (m *Manager) removeChannel(channelName string) {
-	m.Lock()
-	defer m.Unlock()
-
-	if _, ok := m.channels[channelName]; ok {
-		delete(m.channels, channelName)
-	}
-	log.Println("Removed Channel: ", channelName)
-
 }

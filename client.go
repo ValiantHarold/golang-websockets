@@ -17,7 +17,7 @@ var (
 	maxMessageSize int64 = 512
 )
 
-type ClientList map[*Client]bool
+type ClientList map[string]*Client
 
 type Client struct {
 	userId  string
@@ -38,8 +38,6 @@ func NewClient(userId string, conn *websocket.Conn, manager *Manager) *Client {
 
 func (c *Client) readMessages() {
 	defer func() {
-		c.manager.removeChannel("user__" + c.userId + "__friends")
-		c.manager.removeChannel("user__" + c.userId + "__messages")
 		c.manager.removeClient(c)
 	}()
 
@@ -76,8 +74,6 @@ func (c *Client) readMessages() {
 
 func (c *Client) writeMessages() {
 	defer func() {
-		c.manager.leaveChannel(c, "user__"+c.userId+"__friends")
-		c.manager.leaveChannel(c, "user__"+c.userId+"__messages")
 		c.manager.removeClient(c)
 	}()
 

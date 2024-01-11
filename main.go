@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	_ "net/http/pprof"
 
 	"github.com/gorilla/mux"
 )
@@ -10,6 +11,8 @@ import (
 func main() {
 	r := mux.NewRouter()
 	manager := NewManager()
+
+	r.PathPrefix("/debug/pprof/").Handler(http.DefaultServeMux)
 
 	r.HandleFunc("/ws/{userId}", manager.serveWS)
 

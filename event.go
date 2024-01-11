@@ -3,8 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
-	"time"
 )
 
 type Event struct {
@@ -22,7 +20,7 @@ const (
 )
 
 type AddFriendEvent struct {
-	Channel string `json:"channel"`
+	UserId string `json:"userId"`
 }
 
 type NewFriendEvent struct {
@@ -30,51 +28,23 @@ type NewFriendEvent struct {
 }
 
 type SendMessageEvent struct {
-	SenderId string `json:"senderId"`
-	Message  string `json:"message"`
+	UserId  string `json:"userId"`
+	Message string `json:"message"`
 }
 
 type NewMessageEvent struct {
-	SendMessageEvent
-	Sent time.Time `json:"sent"`
+	SenderId string `json:"senderId"`
+	Message  string `json:"message"`
 }
-
-// func SendMessageHandler(event Event, c *Client) error {
-// 	// Marshal Payload into wanted format
-// 	var chatevent SendMessageEvent
-// 	if err := json.Unmarshal(event.Data, &chatevent); err != nil {
-// 		return fmt.Errorf("bad payload in request: %v", err)
-// 	}
-
-// 	// Prepare an Outgoing Message to others
-// 	var broadMessage NewMessageEvent
-
-// 	broadMessage.Sent = time.Now()
-// 	broadMessage.SenderId = chatevent.SenderId
-// 	broadMessage.Message = chatevent.Message
-
-// 	data, err := json.Marshal(broadMessage)
-// 	if err != nil {
-// 		return fmt.Errorf("failed to marshal broadcast message: %v", err)
-// 	}
-
-// 	// Place payload into an Event
-// 	var outgoingEvent Event
-// 	outgoingEvent.Type = EventNewMessage
-// 	outgoingEvent.Data = data
-// 	// Broadcast to all other Clients
-// 	for client := range c.manager.clients {
-
-// 		client.egress <- outgoingEvent
-
-// 	}
-// 	return nil
-// }
 
 func AddFriendHandler(event Event, c *Client) error {
 	var friendEvent AddFriendEvent
 	if err := json.Unmarshal(event.Data, &friendEvent); err != nil {
 		return fmt.Errorf("bad payload in request: %v", err)
+	}
+
+	if _, exists := c.manager.clients[friendEvent.UserId]; !exists {
+		return fmt.Errorf("Friend does not exists")
 	}
 
 	var newFriend NewFriendEvent
@@ -90,15 +60,36 @@ func AddFriendHandler(event Event, c *Client) error {
 	outgoingEvent.Type = EventNewFriend
 	outgoingEvent.Data = data
 
-	for client := range c.manager.channels[friendEvent.Channel] {
-		client.egress <- outgoingEvent
-	}
+	c.manager.clients[friendEvent.UserId].egress <- outgoingEvent
 
 	return nil
 }
 
 func SendMessageHandler(event Event, c *Client) error {
-	log.Println(event)
+	var messageEvent SendMessageEvent
+	if err := json.Unmarshal(event.Data, &messageEvent); err != nil {
+		return fmt.Errorf("bad payload in request: %v", err)
+	}
+
+	if _, exists := c.manager.clients[messageEvent.UserId]; !exists {
+		return fmt.Errorf("Person does not exists")
+	}
+
+	var newMessage NewMessageEvent
+
+	newMessage.SenderId = c.userId
+	newMessage.Message = messageEvent.Message
+
+	data, err := json.Marshal(newMessage)
+	if err != nil {
+		return fmt.Errorf("failed to marshal broadcast message: %v", err)
+	}
+
+	var outgoingEvent Event
+	outgoingEvent.Type = EventNewMessage
+	outgoingEvent.Data = data
+
+	c.manager.clients[messageEvent.UserId].egress <- outgoingEvent
 
 	return nil
 }
